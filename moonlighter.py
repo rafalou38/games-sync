@@ -1,4 +1,5 @@
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 from shutil import copy
 from dateutil.parser import parse
 from genericpath import exists
@@ -47,19 +48,47 @@ e = device.pull(ANDROID_SAVE_PATH, ANDROID_DOWNLOAD_FILE)
 cprint(f"Done.", light.green)
 
 
-def keepLocalOrNot():
+def humanDuration(seconds):
+    delta = relativedelta(seconds=int(seconds))
+    result = ""
+    if delta.hours:
+        result += str(delta.hours) + "h "
+    if delta.minutes:
+        result += str(delta.minutes) + "m "
+    if delta.seconds:
+        result += str(delta.seconds) + "s"
+    return result
 
+
+def keepLocalOrNot():
     with open(ANDROID_DOWNLOAD_FILE, "r") as f:
         androidData = json.load(f)
         androidLatestSave = parse(androidData["gameSlots"][0]["timeLastSave"])
+        androidTotalPlayed = int(
+            androidData["gameSlots"][0]["achievements"]["totalPlayTime"]
+        )
+        androidTotalPlayedReadable = humanDuration(androidTotalPlayed)
     with open(LOCAL_SAVE_PATH, "r") as f:
         localData = json.load(f)
         localLatestSave = parse(localData["gameSlots"][0]["timeLastSave"])
 
-    keepLocal = False
+        localTotalPlayed = int(
+            localData["gameSlots"][0]["achievements"]["totalPlayTime"]
+        )
+        localTotalPlayedReadable = humanDuration(localTotalPlayed)
+
+    localLatest = False
     if localLatestSave > androidLatestSave:
-        keepLocal = True
+        localLatest = True
     elif localLatestSave == androidLatestSave:
+        print("saves are identical")
+        remove(ANDROID_DOWNLOAD_FILE)
+        exit(0)
+
+    localLonger = False
+    if localTotalPlayed > androidTotalPlayed:
+        localLonger = True
+    elif localTotalPlayed == androidTotalPlayed:
         print("saves are identical")
         remove(ANDROID_DOWNLOAD_FILE)
         exit(0)
@@ -67,14 +96,26 @@ def keepLocalOrNot():
     cprint("Last save on Android  :", light.black, end="")
     cprint(
         androidLatestSave.strftime("%Y-%m-%d %I:%M %p"),
-        light.red if keepLocal else light.green,
+        light.red if localLatest else light.green,
+        end=" ",
+    )
+    cprint(
+        androidTotalPlayedReadable,
+        light.red if localLonger else light.green,
     )
     cprint("Last save on Desktop  :", light.black, end="")
+
     cprint(
         localLatestSave.strftime("%Y-%m-%d %I:%M %p"),
-        light.green if keepLocal else light.red,
+        light.green if localLatest else light.red,
+        end=" ",
     )
-    if keepLocal:
+    cprint(
+        localTotalPlayedReadable,
+        light.green if localLonger else light.red,
+    )
+
+    if localLatest:
         r = input(f"{GREY} Upload to android {MAGENTA}    {GREY}? (y/n) {RESET}")
         if r == "y":
             return True
